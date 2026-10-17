@@ -1,0 +1,8 @@
+{
+  "name": "Ubuntu Quest 4to Grado",
+  "description": "Plataforma educativa y PWA colaborativa para 4to grado basada en la filosofía Ubuntu ('Soy porque somos'). Construcción colectiva de materias escolares e Historia de Venezuela en tiempo real.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

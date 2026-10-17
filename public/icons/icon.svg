@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0D9488" />
+      <stop offset="50%" stop-color="#0F766E" />
+      <stop offset="100%" stop-color="#115E59" />
+    </linearGradient>
+    <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FBBF24" />
+      <stop offset="100%" stop-color="#F59E0B" />
+    </linearGradient>
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Background rounded canvas -->
+  <rect width="512" height="512" rx="128" fill="url(#bgGrad)" />
+
+  <!-- Outer Ubuntu Circle of Connection -->
+  <circle cx="256" cy="256" r="210" fill="none" stroke="#FDE68A" stroke-width="6" stroke-dasharray="16 14" opacity="0.4" />
+
+  <!-- Sun of knowledge -->
+  <circle cx="256" cy="230" r="75" fill="url(#sunGrad)" filter="url(#glow)" />
+
+  <!-- Cooperative hands/figures uniting in a circle -->
+  <!-- Figure 1: Top (Coral) -->
+  <circle cx="256" cy="110" r="26" fill="#F87171" />
+  <path d="M226 150 Q256 130 286 150 L275 185 Q256 175 237 185 Z" fill="#F87171" />
+
+  <!-- Figure 2: Top Right (Amber) -->
+  <circle cx="360" cy="170" r="24" fill="#FBBF24" />
+  <path d="M335 195 Q365 180 385 205 L370 235 Q350 220 330 225 Z" fill="#FBBF24" />
+
+  <!-- Figure 3: Bottom Right (Emerald) -->
+  <circle cx="370" cy="300" r="24" fill="#34D399" />
+  <path d="M350 325 Q375 320 390 345 L365 370 Q345 350 335 340 Z" fill="#34D399" />
+
+  <!-- Figure 4: Bottom Left (Cyan) -->
+  <circle cx="142" cy="300" r="24" fill="#38BDF8" />
+  <path d="M122 345 Q137 320 162 325 L177 340 Q167 350 147 370 Z" fill="#38BDF8" />
+
+  <!-- Figure 5: Top Left (Violet) -->
+  <circle cx="152" cy="170" r="24" fill="#C084FC" />
+  <path d="M127 205 Q147 180 177 195 L182 225 Q162 220 142 235 Z" fill="#C084FC" />
+
+  <!-- Open Collaborative Book / Scroll at Base -->
+  <path d="M160 360 Q256 340 352 360 L360 410 Q256 390 152 410 Z" fill="#FFFFFF" opacity="0.95" />
+  <path d="M256 345 L256 400" stroke="#0D9488" stroke-width="4" stroke-linecap="round" />
+
+  <!-- Small seedling of wisdom sprouting from the center book -->
+  <path d="M256 340 Q256 295 240 280 Q256 288 256 340" fill="#10B981" />
+  <path d="M256 340 Q256 295 272 280 Q256 288 256 340" fill="#34D399" />
+
+  <!-- Text "UBUNTU" at the base curved or clean -->
+  <text x="256" y="460" text-anchor="middle" font-family="'Fredoka', sans-serif" font-weight="700" font-size="34" fill="#FEF08A" letter-spacing="4">UBUNTU QUEST</text>
+</svg>
