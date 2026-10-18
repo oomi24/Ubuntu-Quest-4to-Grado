@@ -210,6 +210,112 @@ export async function uploadMapImage(
   };
 }
 
+export const DEFAULT_IMGBB_API_KEY = '2fb57a84a2f3725356a85e9e99edb1a7';
+
+/**
+ * Obtiene la API Key de ImgBB activa (de localStorage o la predeterminada por la maestra)
+ */
+export function getActiveImgBBApiKey(): string {
+  try {
+    return localStorage.getItem('ubuntu_imgbb_api_key') || DEFAULT_IMGBB_API_KEY;
+  } catch {
+    return DEFAULT_IMGBB_API_KEY;
+  }
+}
+
+export function setActiveImgBBApiKey(key: string) {
+  try {
+    if (key.trim()) {
+      localStorage.setItem('ubuntu_imgbb_api_key', key.trim());
+    } else {
+      localStorage.removeItem('ubuntu_imgbb_api_key');
+    }
+  } catch {
+    // ignorar en entornos restringidos
+  }
+}
+
+/**
+ * Sube automáticamente una imagen a ImgBB.
+ * Intenta primero la API directa de ImgBB con FormData (más rápida y nativa),
+ * luego el endpoint proxy del servidor /api/upload-imgbb,
+ * y finalmente fallback local con DataURL si no hay conexión a internet.
+ */
+export async function uploadToImgBB(
+  file: File,
+  salaId: string,
+  mapName?: string,
+  customApiKey?: string
+): Promise<{ url: string; width: number; height: number }> {
+  const validation = await validateMapFile(file);
+  if (!validation.valid || !validation.width || !validation.height) {
+    throw new Error(validation.error || 'La imagen no cumple con las restricciones');
+  }
+
+  const { dataUrl, width, height } = await getImageDimensions(file);
+  const apiKey = (customApiKey || getActiveImgBBApiKey()).trim();
+
+  // 1. Intento principal: Subida directa a la API de ImgBB con FormData (soporta CORS nativo)
+  try {
+    const formData = new FormData();
+    formData.append('image', file);
+    if (mapName) {
+      formData.append('name', mapName);
+    }
+
+    const res = await fetch(`https://api.imgbb.com/1/upload?key=${apiKey}`, {
+      method: 'POST',
+      body: formData,
+    });
+
+    if (res.ok) {
+      const json = await res.json();
+      if (json.success && json.data?.url) {
+        const publicUrl = json.data.url; // Enlace directo https://i.ibb.co/...
+        cacheMapImageForRoom(salaId, publicUrl);
+        return {
+          url: publicUrl,
+          width: Number(json.data.width) || width,
+          height: Number(json.data.height) || height,
+        };
+      }
+    }
+  } catch (directErr) {
+    console.warn('Subida directa a ImgBB no completó, probando proxy del servidor:', directErr);
+  }
+
+  // 2. Intento secundario: Proxy local /api/upload-imgbb
+  try {
+    const response = await fetch('/api/upload-imgbb', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image: dataUrl, name: mapName || file.name }),
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.url) {
+        cacheMapImageForRoom(salaId, data.url);
+        return {
+          url: data.url,
+          width: data.width || width,
+          height: data.height || height,
+        };
+      }
+    }
+  } catch (proxyErr) {
+    console.warn('Proxy /api/upload-imgbb falló o no está disponible:', proxyErr);
+  }
+
+  // 3. Fallback de contingencia: Guardar en DataURL base64 para uso local sin internet
+  cacheMapImageForRoom(salaId, dataUrl);
+  return {
+    url: dataUrl,
+    width,
+    height,
+  };
+}
+
 /**
  * Cachea la última imagen válida cargada por sala en localStorage para acceso offline rápido
  */

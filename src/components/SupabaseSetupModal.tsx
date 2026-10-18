@@ -33,8 +33,30 @@ CREATE TABLE estudiantes (
   conectado BOOLEAN DEFAULT TRUE,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+CREATE TABLE mapas_base (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sala_id UUID REFERENCES salas(id) ON DELETE CASCADE,
+  etapa VARCHAR(50) NOT NULL,
+  nombre VARCHAR(120) NOT NULL,
+  imagen_url TEXT NOT NULL,
+  imagen_width INT NOT NULL,
+  imagen_height INT NOT NULL,
+  publicado BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE TABLE zonas_mapa (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  mapa_base_id UUID REFERENCES mapas_base(id) ON DELETE CASCADE,
+  sala_id UUID REFERENCES salas(id) ON DELETE CASCADE,
+  nombre VARCHAR(100) NOT NULL,
+  color VARCHAR(20) DEFAULT '#F59E0B',
+  coords_json JSONB NOT NULL,
+  etapa VARCHAR(50) NOT NULL,
+  orden INT DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
 -- Habilita Realtime en Supabase:
-ALTER PUBLICATION supabase_realtime ADD TABLE salas, estudiantes;`;
+ALTER PUBLICATION supabase_realtime ADD TABLE salas, estudiantes, mapas_base, zonas_mapa;`;
 
   const copySql = () => {
     navigator.clipboard.writeText(sqlSample);
