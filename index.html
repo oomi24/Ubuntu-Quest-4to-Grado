@@ -5,6 +5,39 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Ubuntu Quest 4to Grado</title>
     <meta name="description" content="Plataforma educativa colaborativa para 4to grado basada en la filosofía Ubuntu: Soy porque somos. Aprendizaje colectivo y exploración de la Historia de Venezuela." />
+
+    <!-- Chrome Extension fetch interceptor resilience & error isolation -->
+    <script>
+      (() => {
+        try {
+          // Provide a setter for window.fetch so browser extensions that monkey-patch fetch do not throw:
+          // "TypeError: Cannot set property fetch of #<Window> which has only a getter"
+          let _currentFetch = window.fetch;
+          Object.defineProperty(window, 'fetch', {
+            configurable: true,
+            enumerable: true,
+            get() {
+              return _currentFetch;
+            },
+            set(newFetch) {
+              _currentFetch = newFetch;
+            }
+          });
+        } catch (_) {}
+
+        // Isolate external extension errors so they never crash the application or error boundaries
+        window.addEventListener('error', (event) => {
+          if (
+            (event.filename && event.filename.includes('chrome-extension://')) ||
+            (event.error && event.error.stack && event.error.stack.includes('chrome-extension://'))
+          ) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            return true;
+          }
+        }, true);
+      })();
+    </script>
     
     <!-- PWA & Mobile Meta Tags -->
     <link rel="manifest" href="/manifest.json" />
@@ -34,8 +67,8 @@
       // Register service worker for offline support
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').catch((err) => {
-            console.log('SW registration note:', err);
+          navigator.serviceWorker.register('/sw.js').catch(() => {
+            // Non-fatal if restricted in sandbox iframe
           });
         });
       }
