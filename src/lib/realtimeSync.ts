@@ -502,6 +502,17 @@ class RealtimeSyncManager {
     });
   }
 
+  public castConsensusVote(elementoId: string, estudianteNombre: string) {
+    if (this.state.votacionActiva?.activa) {
+      this.castVoto(this.state.votacionActiva.id, estudianteNombre, elementoId);
+    } else {
+      this.notify({
+        tipo: 'voto_emitido',
+        mensaje: `${estudianteNombre} propuso una idea para el consenso histórico`
+      });
+    }
+  }
+
   public closeVotacion(votacionId: string) {
     if (!this.state.votacionActiva || this.state.votacionActiva.id !== votacionId) return;
 

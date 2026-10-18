@@ -86,9 +86,9 @@ export default function App() {
   };
 
   // Teacher starts history module
-  const handleStartHistory = (etapa: EtapaHistorica, zonaId: string) => {
+  const handleStartHistory = (etapa: EtapaHistorica, zonaId?: string) => {
     sounds.playClick();
-    realtimeManager.setFase('historia_activa', { etapa, zona: zonaId });
+    realtimeManager.setFase('historia_activa', { etapa, zona: zonaId || '' });
   };
 
   // Trigger collective celebration
