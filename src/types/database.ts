@@ -122,3 +122,32 @@ export interface CuentoColaborativo {
     timestamp: string;
   }>;
 }
+
+export interface CoordPunto {
+  x: number; // Coordenada X en píxeles de la imagen original
+  y: number; // Coordenada Y en píxeles de la imagen original
+}
+
+export interface MapaBase {
+  id: string;
+  sala_id: string;
+  etapa: EtapaHistorica;
+  nombre: string;
+  imagen_url: string;
+  imagen_width: number;
+  imagen_height: number;
+  publicado: boolean;
+  created_at: string;
+}
+
+export interface ZonaMapa {
+  id: string;
+  mapa_base_id: string;
+  sala_id: string;
+  nombre: string;
+  color: string;
+  coords_json: CoordPunto[]; // [{x, y}, ...]
+  etapa: EtapaHistorica;
+  orden: number;
+  created_at: string;
+}

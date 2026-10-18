@@ -28,16 +28,29 @@ Aplicación Web Progresiva (PWA) diseñada para estudiantes de 4to grado (9–10
    - Mapa interactivo de Venezuela con zonas clicables.
    - Generador de Crónica Colectiva ("Un día en la vida de la aldea") integrado en el **Códice de la Clase** con opción de impresión de diploma colectivo.
 
-4. **Cumplimiento PWA Completo:**
+4. **Editor de Mapas de la Maestra (React + Leaflet + Geoman):**
+   - **Opción A (Recomendada):** Subida de archivo a Supabase Storage bucket `'mapas'` con validaciones de tipo (JPG, PNG, WebP), peso (≤ 3 MB) y dimensiones (≤ 2500×2500 px).
+   - **Opción B (Alternativa):** Enlace directo a imágenes externas (ImgBB, Google Drive, etc.) con verificación de carga `onload` / `onerror` y dimensiones reales.
+   - **Proyección CRS.Simple:** Mapeo de polígonos sobre `ImageOverlay` relativo a las dimensiones originales `{ x, y }` de la imagen con inversión de eje Y `[height - y, x]` para orientación natural.
+   - **Flujo de 3 Pasos:** Selección de origen de imagen → Vista previa y validación técnica → Trazado con Geoman + Modal de configuración (nombre, color, etapa) + Publicación para el aula.
+   - **Caché Offline:** Guarda la última imagen en `localStorage` para permitir la apertura inmediata sin internet.
+
+5. **Cumplimiento PWA Completo:**
    - `manifest.json` configurado para modo `standalone`.
    - `sw.js` (Service Worker) con estrategia Cache-First para recursos estáticos y Network-First con fallback offline para navegación.
    - Íconos PNG y SVG (192px, 512px, maskable y apple-touch-icon).
    - Botón de instalación in-app (`PWAInstallButton`) con modal explicativo para iOS y Android.
    - Notificación de conectividad en vivo (`OfflineIndicator`).
 
-5. **Audio Sintetizado con Web Audio API:**
+6. **Audio Sintetizado con Web Audio API:**
    - Sonidos matemáticos generados en tiempo real por el navegador (chimes pentatónicos, tono de reflexión y fanfarria).
    - 100% libre de descargas de audio y funciona sin conexión a internet.
+
+---
+
+## 🔒 Seguridad y Advertencia sobre ImgBB
+- Las imágenes subidas a ImgBB son públicas. No subas mapas con datos sensibles o personales de estudiantes.
+- No se exponen claves de API de ImgBB en el cliente. Si en el futuro se desea subida programática directa a ImgBB, debe implementarse mediante una Supabase Edge Function protegida.
 
 ---
 
@@ -49,8 +62,15 @@ El archivo `/supabase/schema.sql` contiene la configuración completa:
 - `progreso_historia`: `id`, `sala_id`, `etapa`, `zona`, `datos_json`, `completado`, `created_at`.
 - `respuestas_ejercicios`: `id`, `sala_id`, `estudiante_id`, `materia`, `ejercicio_id`, `respuesta`, `es_correcta`, `created_at`.
 - `cuentos_colaborativos`: `id`, `sala_id`, `etapa`, `texto_completo`, `fragmentos_json`, `created_at`.
+- `mapas_base`: `id`, `sala_id`, `etapa`, `nombre`, `imagen_url`, `imagen_width`, `imagen_height`, `publicado`, `created_at`.
+- `zonas_mapa`: `id`, `mapa_base_id`, `sala_id`, `nombre`, `color`, `coords_json`, `etapa`, `orden`, `created_at`.
 - Publicación habilitada en `supabase_realtime`.
 - Políticas de Row Level Security (RLS) colaborativas.
+
+### Creación del Bucket 'mapas' en Supabase Storage:
+1. En Supabase Dashboard ve a **Storage** -> **New Bucket**.
+2. Nombre: `mapas`. Marca la casilla **Public bucket**.
+3. En **Policies**, añade una política de `SELECT` para `public` (lectura abierta) y `INSERT` para `anon` (subida escolar sin login).
 
 ---
 

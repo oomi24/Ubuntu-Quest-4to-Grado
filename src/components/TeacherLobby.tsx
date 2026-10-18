@@ -313,17 +313,30 @@ export const TeacherLobby: React.FC<TeacherLobbyProps> = ({
 
             {/* Selected Era Details and Zone Cards */}
             <div className="bg-white rounded-3xl p-6 border border-stone-200 shadow-sm space-y-5">
-              <div className="border-b border-stone-100 pb-4">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wide">
-                  <span>{etapaObj.icono}</span>
-                  <span>{etapaObj.rango_anos}</span>
+              <div className="border-b border-stone-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <div className="flex items-center gap-2 text-xs font-bold text-amber-700 uppercase tracking-wide">
+                    <span>{etapaObj.icono}</span>
+                    <span>{etapaObj.rango_anos}</span>
+                  </div>
+                  <h3 className="text-xl font-heading font-bold text-stone-900 mt-1">
+                    {etapaObj.titulo}: {etapaObj.lema}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-2xl leading-relaxed">
+                    {etapaObj.resumen}
+                  </p>
                 </div>
-                <h3 className="text-xl font-heading font-bold text-stone-900 mt-1">
-                  {etapaObj.titulo}: {etapaObj.lema}
-                </h3>
-                <p className="text-xs sm:text-sm text-stone-600 mt-1 max-w-3xl leading-relaxed">
-                  {etapaObj.resumen}
-                </p>
+
+                <button
+                  onClick={() => {
+                    sounds.playClick();
+                    onStartHistory(selectedEtapa, selectedZona);
+                  }}
+                  className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-stone-950 font-bold text-xs shadow-sm transition cursor-pointer self-start sm:self-center flex-shrink-0"
+                >
+                  <Compass className="w-4 h-4" />
+                  <span>Abrir Historia y Editor de Mapas</span>
+                </button>
               </div>
 
               {/* Zones in this historical era */}

@@ -26,8 +26,14 @@ import {
   Lightbulb, 
   ShieldAlert,
   Send,
-  Printer
+  Printer,
+  Edit3,
+  Map as MapIcon,
+  Layers
 } from 'lucide-react';
+import { useMapaBase } from '../hooks/useMapaBase';
+import { MapViewer } from './MapViewer';
+import { MapEditor } from './MapEditor';
 
 interface HistoryModuleProps {
   sala: Sala;
@@ -59,6 +65,17 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
   const [activeZonaId, setActiveZonaId] = useState<string>(currentZonaId);
   const zonaObj: ZonaHistorica = 
     etapaObj.zonas.find((z) => z.id === activeZonaId) || etapaObj.zonas[0];
+
+  // Integración de Mapa Personalizado de la Maestra (Leaflet)
+  const { mapaBase, zonas: zonasCustom } = useMapaBase(sala.id, activeEtapa);
+  const [editorMapOpen, setEditorMapOpen] = useState(false);
+  const [mapViewMode, setMapViewMode] = useState<'custom' | 'vector'>('vector');
+
+  useEffect(() => {
+    if (mapaBase?.publicado && mapaBase.imagen_url) {
+      setMapViewMode('custom');
+    }
+  }, [mapaBase?.publicado, mapaBase?.imagen_url]);
 
   // Group decision state
   const [selectedDecisions, setSelectedDecisions] = useState<Record<string, string>>({
@@ -176,6 +193,20 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
     });
   };
 
+  if (editorMapOpen) {
+    return (
+      <MapEditor
+        salaId={sala.id}
+        etapa={activeEtapa}
+        onClose={() => setEditorMapOpen(false)}
+        onMapPublished={() => {
+          setEditorMapOpen(false);
+          setMapViewMode('custom');
+        }}
+      />
+    );
+  }
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       {/* 5-Era Interactive Timeline Bar */}
@@ -243,7 +274,7 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
         {/* Left Column: Interactive Map of Venezuela & Selected Zone Info */}
         <div className="lg:col-span-5 space-y-4">
           <div className="bg-white rounded-3xl p-5 border border-stone-200 shadow-sm space-y-4">
-            <div className="flex items-center justify-between border-b border-stone-100 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-stone-100 pb-3 gap-2">
               <div>
                 <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">
                   Mapa Geográfico de la Época
@@ -252,126 +283,185 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
                   Zonas de {etapaObj.titulo}
                 </h3>
               </div>
-              <span className="text-xs text-stone-500 font-mono">
-                {etapaObj.zonas.length} zonas activas
-              </span>
+
+              <div className="flex items-center gap-2">
+                {rol === 'maestra' && (
+                  <button
+                    onClick={() => {
+                      sounds.playClick();
+                      setEditorMapOpen(true);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-stone-950 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                    title="Subir mapa base y trazar polígonos"
+                  >
+                    <Edit3 className="w-3.5 h-3.5" />
+                    <span>Editor de Mapa</span>
+                  </button>
+                )}
+
+                {mapaBase?.publicado && (
+                  <div className="inline-flex p-0.5 bg-stone-100 rounded-xl text-xs font-bold">
+                    <button
+                      onClick={() => {
+                        sounds.playClick();
+                        setMapViewMode('custom');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                        mapViewMode === 'custom' ? 'bg-white text-teal-900 shadow-2xs' : 'text-stone-500'
+                      }`}
+                    >
+                      Leaflet ({zonasCustom.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        sounds.playClick();
+                        setMapViewMode('vector');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                        mapViewMode === 'vector' ? 'bg-white text-teal-900 shadow-2xs' : 'text-stone-500'
+                      }`}
+                    >
+                      Ilustrado
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* Simplified Artistic Venezuela Map SVG with Clickable Regions */}
-            <div className="relative bg-gradient-to-br from-cyan-50 via-teal-50/40 to-amber-50/30 rounded-2xl p-4 border border-teal-100 flex items-center justify-center">
-              <svg viewBox="0 0 420 340" className="w-full max-w-[360px] h-auto drop-shadow-md">
-                {/* Caribbean Sea waves hint */}
-                <path d="M 40 40 Q 80 35 120 40 T 200 40 T 280 40 T 360 40" fill="none" stroke="#38BDF8" stroke-width="2" stroke-dasharray="6 6" opacity="0.4" />
-                <path d="M 60 65 Q 100 60 140 65 T 220 65 T 300 65" fill="none" stroke="#38BDF8" stroke-width="2" stroke-dasharray="6 6" opacity="0.3" />
+            {/* Vista del Mapa: Leaflet CRS.Simple si está publicado y activo, o SVG Ilustrado */}
+            {mapViewMode === 'custom' && mapaBase?.publicado ? (
+              <MapViewer
+                mapaBase={mapaBase}
+                zonas={zonasCustom}
+                selectedZonaId={activeZonaId}
+                onSelectZona={(z) => {
+                  setActiveZonaId(z.id);
+                  if (rol === 'maestra') {
+                    realtimeManager.setFase('historia_activa', {
+                      etapa: activeEtapa,
+                      zona: z.id
+                    });
+                  }
+                }}
+                className="h-[360px]"
+              />
+            ) : (
+              /* Simplified Artistic Venezuela Map SVG with Clickable Regions */
+              <div className="relative bg-gradient-to-br from-cyan-50 via-teal-50/40 to-amber-50/30 rounded-2xl p-4 border border-teal-100 flex items-center justify-center">
+                <svg viewBox="0 0 420 340" className="w-full max-w-[360px] h-auto drop-shadow-md">
+                  {/* Caribbean Sea waves hint */}
+                  <path d="M 40 40 Q 80 35 120 40 T 200 40 T 280 40 T 360 40" fill="none" stroke="#38BDF8" stroke-width="2" stroke-dasharray="6 6" opacity="0.4" />
+                  <path d="M 60 65 Q 100 60 140 65 T 220 65 T 300 65" fill="none" stroke="#38BDF8" stroke-width="2" stroke-dasharray="6 6" opacity="0.3" />
 
-                {/* Venezuela Stylized Territorial Silhouette */}
-                {/* Occidente & Zulia */}
-                <path
-                  d="M 50 110 Q 75 70 120 85 Q 110 130 90 150 Q 60 140 50 110 Z"
-                  fill={zonaObj.region === 'Occidente' || zonaObj.region === 'Zulia' ? '#F59E0B' : '#6EE7B7'}
-                  stroke="#047857"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Occidente' || x.region === 'Zulia');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="75" y="115" font-size="9" font-weight="bold" fill="#064E3B">Occidente / Zulia</text>
+                  {/* Venezuela Stylized Territorial Silhouette */}
+                  {/* Occidente & Zulia */}
+                  <path
+                    d="M 50 110 Q 75 70 120 85 Q 110 130 90 150 Q 60 140 50 110 Z"
+                    fill={zonaObj.region === 'Occidente' || zonaObj.region === 'Zulia' ? '#F59E0B' : '#6EE7B7'}
+                    stroke="#047857"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Occidente' || x.region === 'Zulia');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="75" y="115" font-size="9" font-weight="bold" fill="#064E3B">Occidente / Zulia</text>
 
-                {/* Andes Mountain Chain */}
-                <path
-                  d="M 70 155 Q 100 160 130 190 Q 110 220 80 200 Q 65 175 70 155 Z"
-                  fill={zonaObj.region === 'Andes' ? '#F59E0B' : '#A7F3D0'}
-                  stroke="#047857"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Andes');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="80" y="185" font-size="9" font-weight="bold" fill="#064E3B">Andes</text>
+                  {/* Andes Mountain Chain */}
+                  <path
+                    d="M 70 155 Q 100 160 130 190 Q 110 220 80 200 Q 65 175 70 155 Z"
+                    fill={zonaObj.region === 'Andes' ? '#F59E0B' : '#A7F3D0'}
+                    stroke="#047857"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Andes');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="80" y="185" font-size="9" font-weight="bold" fill="#064E3B">Andes</text>
 
-                {/* Centro & Costa / Caracas */}
-                <path
-                  d="M 125 90 Q 210 80 230 125 Q 170 145 125 125 Z"
-                  fill={zonaObj.region === 'Centro' || zonaObj.region === 'Costa/Caribe' ? '#F59E0B' : '#34D399'}
-                  stroke="#047857"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Centro' || x.region === 'Costa/Caribe');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="145" y="112" font-size="9" font-weight="bold" fill="#064E3B">Centro / Caracas</text>
+                  {/* Centro & Costa / Caracas */}
+                  <path
+                    d="M 125 90 Q 210 80 230 125 Q 170 145 125 125 Z"
+                    fill={zonaObj.region === 'Centro' || zonaObj.region === 'Costa/Caribe' ? '#F59E0B' : '#34D399'}
+                    stroke="#047857"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Centro' || x.region === 'Costa/Caribe');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="145" y="112" font-size="9" font-weight="bold" fill="#064E3B">Centro / Caracas</text>
 
-                {/* Oriente & Costa Caribe */}
-                <path
-                  d="M 235 95 Q 320 85 350 140 Q 280 160 235 130 Z"
-                  fill={zonaObj.region === 'Oriente' || zonaObj.region === 'Costa/Caribe' ? '#F59E0B' : '#6EE7B7'}
-                  stroke="#047857"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Oriente');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="260" y="125" font-size="9" font-weight="bold" fill="#064E3B">Oriente / Cumaná</text>
+                  {/* Oriente & Costa Caribe */}
+                  <path
+                    d="M 235 95 Q 320 85 350 140 Q 280 160 235 130 Z"
+                    fill={zonaObj.region === 'Oriente' || zonaObj.region === 'Costa/Caribe' ? '#F59E0B' : '#6EE7B7'}
+                    stroke="#047857"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Oriente');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="260" y="125" font-size="9" font-weight="bold" fill="#064E3B">Oriente / Cumaná</text>
 
-                {/* Inmensos Llanos */}
-                <path
-                  d="M 115 155 Q 230 145 270 180 Q 220 230 135 210 Z"
-                  fill={zonaObj.region === 'Llanos' ? '#F59E0B' : '#FDE68A'}
-                  stroke="#B45309"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Llanos');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="165" y="185" font-size="10" font-weight="bold" fill="#78350F">Llanos</text>
+                  {/* Inmensos Llanos */}
+                  <path
+                    d="M 115 155 Q 230 145 270 180 Q 220 230 135 210 Z"
+                    fill={zonaObj.region === 'Llanos' ? '#F59E0B' : '#FDE68A'}
+                    stroke="#B45309"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Llanos');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="165" y="185" font-size="10" font-weight="bold" fill="#78350F">Llanos</text>
 
-                {/* Guayana, Amazonas & Río Orinoco */}
-                <path
-                  d="M 140 215 Q 275 185 365 210 Q 320 310 200 315 Q 140 265 140 215 Z"
-                  fill={zonaObj.region === 'Guayana' ? '#F59E0B' : '#10B981'}
-                  stroke="#047857"
-                  stroke-width="2.5"
-                  className="cursor-pointer transition-all hover:opacity-90"
-                  onClick={() => {
-                    const z = etapaObj.zonas.find((x) => x.region === 'Guayana');
-                    if (z) {
-                      sounds.playClick();
-                      setActiveZonaId(z.id);
-                    }
-                  }}
-                />
-                <text x="215" y="260" font-size="11" font-weight="bold" fill="#064E3B">Guayana / Gran Sabana</text>
+                  {/* Guayana, Amazonas & Río Orinoco */}
+                  <path
+                    d="M 140 215 Q 275 185 365 210 Q 320 310 200 315 Q 140 265 140 215 Z"
+                    fill={zonaObj.region === 'Guayana' ? '#F59E0B' : '#10B981'}
+                    stroke="#047857"
+                    stroke-width="2.5"
+                    className="cursor-pointer transition-all hover:opacity-90"
+                    onClick={() => {
+                      const z = etapaObj.zonas.find((x) => x.region === 'Guayana');
+                      if (z) {
+                        sounds.playClick();
+                        setActiveZonaId(z.id);
+                      }
+                    }}
+                  />
+                  <text x="215" y="260" font-size="11" font-weight="bold" fill="#064E3B">Guayana / Gran Sabana</text>
 
-                {/* Orinoco River Flow */}
-                <path d="M 135 210 Q 210 180 270 185 Q 330 170 360 160" fill="none" stroke="#0284C7" stroke-width="3" stroke-linecap="round" />
-                <text x="220" y="175" font-size="7" font-weight="bold" fill="#0369A1">Río Orinoco</text>
-              </svg>
-            </div>
+                  {/* Orinoco River Flow */}
+                  <path d="M 135 210 Q 210 180 270 185 Q 330 170 360 160" fill="none" stroke="#0284C7" stroke-width="3" stroke-linecap="round" />
+                  <text x="220" y="175" font-size="7" font-weight="bold" fill="#0369A1">Río Orinoco</text>
+                </svg>
+              </div>
+            )}
 
             {/* List of Available Zones in this Era */}
             <div className="space-y-2">
