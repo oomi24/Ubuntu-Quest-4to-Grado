@@ -484,7 +484,7 @@ export const ImageSourceSelector: React.FC<ImageSourceSelectorProps> = ({
           {/* Presets de prueba */}
           <div className="pt-2">
             <span className="text-xs font-bold text-stone-500 uppercase tracking-wide block mb-2">
-              O selecciona un mapa de demostración listo para clase:
+              O selecciona un mapa prediseñado de Venezuela listo para clase:
             </span>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {PRESET_MAPS.map((p, idx) => (

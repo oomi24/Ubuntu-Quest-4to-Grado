@@ -7,7 +7,16 @@ import {
   EtapaHistorica, 
   ProgresoHistoria, 
   RespuestaEjercicio,
-  CuentoColaborativo
+  CuentoColaborativo,
+  PresenciaSala,
+  MensajeMuro,
+  Reaccion,
+  Votacion,
+  Voto,
+  TurnoDibujoColaborativo,
+  EstadoPresencia,
+  EmojiReaccion,
+  TipoObjetivoReaccion
 } from '../types/database';
 
 export interface RoomSyncState {
@@ -16,6 +25,12 @@ export interface RoomSyncState {
   respuestas: RespuestaEjercicio[];
   progresoHistoria: ProgresoHistoria | null;
   cuentoColaborativo: CuentoColaborativo | null;
+  presencias: Record<string, PresenciaSala>;
+  mensajesMuro: MensajeMuro[];
+  reacciones: Reaccion[];
+  votacionActiva: Votacion | null;
+  votos: Voto[];
+  turnoDibujo: TurnoDibujoColaborativo | null;
   ultimoEvento?: {
     tipo: string;
     mensaje: string;
@@ -36,7 +51,13 @@ class RealtimeSyncManager {
     estudiantes: [],
     respuestas: [],
     progresoHistoria: null,
-    cuentoColaborativo: null
+    cuentoColaborativo: null,
+    presencias: {},
+    mensajesMuro: [],
+    reacciones: [],
+    votacionActiva: null,
+    votos: [],
+    turnoDibujo: null
   };
 
   constructor() {
@@ -52,14 +73,14 @@ class RealtimeSyncManager {
         console.warn('BroadcastChannel error:', err);
       }
 
-      // Also listen to window storage events as fallback
+      // Fallback con eventos de storage de ventana
       window.addEventListener('storage', (e) => {
         if (e.key === `ubuntu_room_${this.currentRoomCode}` && e.newValue) {
           try {
             const data = JSON.parse(e.newValue);
             this.handleRemoteStateUpdate(data.state, data.eventInfo);
           } catch {
-            // ignore
+            // ignorar
           }
         }
       });
@@ -98,14 +119,27 @@ class RealtimeSyncManager {
       try {
         this.broadcastChannel.postMessage(payload);
       } catch {
-        // ignore
+        // ignorar
       }
     }
 
     try {
       localStorage.setItem(`ubuntu_room_${this.currentRoomCode}`, JSON.stringify(payload));
     } catch {
-      // ignore
+      // ignorar
+    }
+
+    // Si Supabase está conectado, emitir evento en canal Realtime
+    if (this.channel && isSupabaseConfigured) {
+      try {
+        this.channel.send({
+          type: 'broadcast',
+          event: 'room_update',
+          payload
+        });
+      } catch {
+        // ignorar
+      }
     }
   }
 
@@ -117,11 +151,10 @@ class RealtimeSyncManager {
     this.listeners.forEach((l) => l({ ...this.state }));
   }
 
-  // Connect to a room code
+  // Conectar o unirse a una sala
   public async joinRoom(roomCode: string, isTeacher: boolean = false): Promise<RoomSyncState> {
     this.currentRoomCode = roomCode.toUpperCase().trim();
 
-    // Check if room state exists in localStorage
     try {
       const saved = localStorage.getItem(`ubuntu_room_${this.currentRoomCode}`);
       if (saved) {
@@ -129,10 +162,10 @@ class RealtimeSyncManager {
         this.state = parsed.state || this.state;
       }
     } catch {
-      // ignore
+      // ignorar
     }
 
-    // Connect to Supabase Realtime Channel if configured
+    // Conectar canal Realtime de Supabase
     if (isSupabaseConfigured && supabase) {
       try {
         if (this.channel) {
@@ -141,8 +174,7 @@ class RealtimeSyncManager {
 
         this.channel = supabase.channel(`room:${this.currentRoomCode}`, {
           config: {
-            broadcast: { self: false },
-            presence: { key: isTeacher ? 'maestra' : 'estudiante_' + Date.now() }
+            broadcast: { self: false }
           }
         });
 
@@ -154,7 +186,7 @@ class RealtimeSyncManager {
           })
           .subscribe();
       } catch (err) {
-        console.warn('Supabase Realtime connection error:', err);
+        console.warn('Supabase Realtime error:', err);
       }
     }
 
@@ -162,69 +194,73 @@ class RealtimeSyncManager {
     return this.state;
   }
 
-  // Teacher creates a room
-  public createRoom(maestraNombre: string, customCode?: string): Sala {
-    const code = customCode 
-      ? customCode.toUpperCase().trim() 
-      : 'UBUNTU-' + Math.floor(100 + Math.random() * 900);
+  // Crear una sala nueva por la maestra
+  public createRoom(maestraNombre: string, codigoPersonalizado?: string): Sala {
+    const code = codigoPersonalizado?.toUpperCase().trim() || 
+      'UB-' + Math.random().toString(36).substring(2, 6).toUpperCase();
 
     const nuevaSala: Sala = {
       id: 'sala_' + Date.now(),
       codigo: code,
       maestra_nombre: maestraNombre,
       fase_actual: 'espera',
-      created_at: new Date().toISOString(),
       config_json: {
         meta_preguntas: 20,
-        permite_simulados: true,
-        sonido_activo: true
-      }
+        sonido_activo: true,
+        chat_libre_habilitado: false, // Moderación: apagado por defecto
+        modo_mapa_colaborativo: false
+      },
+      created_at: new Date().toISOString()
     };
 
     this.currentRoomCode = code;
     this.state = {
       sala: nuevaSala,
-      estudiantes: [],
+      estudiantes: [], // SOLO estudiantes reales
       respuestas: [],
       progresoHistoria: null,
-      cuentoColaborativo: null
+      cuentoColaborativo: null,
+      presencias: {},
+      mensajesMuro: [],
+      reacciones: [],
+      votacionActiva: null,
+      votos: [],
+      turnoDibujo: null
     };
 
     this.notify({
       tipo: 'sala_creada',
-      mensaje: `La maestra ${maestraNombre} abrió la sala con código ${code}`
+      mensaje: `Sala creada con código: ${code}`
     });
 
     return nuevaSala;
   }
 
-  // Student joins room
+  // Unir un estudiante real a la sala
   public addStudent(nombre: string, avatar: string): Estudiante {
-    const existing = this.state.estudiantes.find(
-      (e) => e.nombre.toLowerCase().trim() === nombre.toLowerCase().trim()
-    );
-
-    if (existing) {
-      existing.conectado = true;
-      existing.avatar = avatar;
-      this.notify({
-        tipo: 'estudiante_reconectado',
-        mensaje: `${nombre} se reconectó a la sala`
-      });
-      return existing;
-    }
-
     const nuevo: Estudiante = {
       id: 'est_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       sala_id: this.state.sala?.id || 'sala_default',
       nombre,
       avatar,
       conectado: true,
+      estado_presencia: 'activo',
       created_at: new Date().toISOString(),
       respuestas_aportadas: 0
     };
 
     this.state.estudiantes = [...this.state.estudiantes, nuevo];
+    
+    // Registrar presencia inicial
+    this.state.presencias[nuevo.id] = {
+      sala_id: nuevo.sala_id,
+      estudiante_id: nuevo.id,
+      estudiante_nombre: nuevo.nombre,
+      avatar: nuevo.avatar,
+      estado: 'activo',
+      ultima_actividad: new Date().toISOString()
+    };
+
     this.notify({
       tipo: 'estudiante_unido',
       mensaje: `¡${nombre} se unió al equipo!`
@@ -233,46 +269,7 @@ class RealtimeSyncManager {
     return nuevo;
   }
 
-  // Add simulated demo students for classroom simulation
-  public toggleSimulatedStudents(enable: boolean) {
-    if (!enable) {
-      this.state.estudiantes = this.state.estudiantes.filter((e) => !e.id.startsWith('sim_'));
-      this.notify({
-        tipo: 'alumnos_simulados',
-        mensaje: 'Alumnos de prueba retirados'
-      });
-      return;
-    }
-
-    const demoKids = [
-      { nombre: 'Camila', avatar: '🦜' },
-      { nombre: 'Mateo', avatar: '🐾' },
-      { nombre: 'Valentina', avatar: '🌸' },
-      { nombre: 'Sebastián', avatar: '🐆' },
-      { nombre: 'Diego', avatar: '🛶' }
-    ];
-
-    const currentNames = new Set(this.state.estudiantes.map((e) => e.nombre));
-    const toAdd: Estudiante[] = demoKids
-      .filter((k) => !currentNames.has(k.nombre))
-      .map((k, idx) => ({
-        id: `sim_${idx}_` + Date.now(),
-        sala_id: this.state.sala?.id || 'sala_default',
-        nombre: k.nombre,
-        avatar: k.avatar,
-        conectado: true,
-        created_at: new Date().toISOString(),
-        respuestas_aportadas: 0
-      }));
-
-    this.state.estudiantes = [...this.state.estudiantes, ...toAdd];
-    this.notify({
-      tipo: 'alumnos_simulados',
-      mensaje: '¡Aula virtual completa con 5 compañeros de prueba!'
-    });
-  }
-
-  // Change room phase / activity (Teacher action)
+  // Cambiar fase de la sala (Acción de la maestra)
   public setFase(fase: FaseSala, options?: { materia?: MateriaTipo; etapa?: EtapaHistorica; zona?: string }) {
     if (!this.state.sala) return;
 
@@ -284,7 +281,6 @@ class RealtimeSyncManager {
       zona_activa: options?.zona ?? this.state.sala.zona_activa
     };
 
-    // If starting a new subject, reset answers if needed
     if (fase === 'ejercicios_activos' && options?.materia) {
       this.state.respuestas = [];
     }
@@ -295,8 +291,15 @@ class RealtimeSyncManager {
     });
   }
 
-  // Submit student exercise answer (Cooperative mechanic)
-  public submitAnswer(estudianteId: string, estudianteNombre: string, materia: MateriaTipo, ejercicioId: number, respuesta: number, esCorrecta: boolean) {
+  // Enviar respuesta a ejercicio escolar (100% cooperativo)
+  public submitAnswer(
+    estudianteId: string, 
+    estudianteNombre: string, 
+    materia: MateriaTipo, 
+    ejercicioId: number, 
+    respuesta: number, 
+    esCorrecta: boolean
+  ) {
     const respuestaObj: RespuestaEjercicio = {
       id: 'resp_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
       sala_id: this.state.sala?.id || 'sala_default',
@@ -311,7 +314,6 @@ class RealtimeSyncManager {
 
     this.state.respuestas = [...this.state.respuestas, respuestaObj];
 
-    // Update student's answers count
     const st = this.state.estudiantes.find((e) => e.id === estudianteId);
     if (st) {
       st.respuestas_aportadas = (st.respuestas_aportadas || 0) + 1;
@@ -322,36 +324,231 @@ class RealtimeSyncManager {
       tipo: 'respuesta_enviada',
       mensaje: `${estudianteNombre} aportó una respuesta`
     });
+  }
 
-    // If simulated students are active, simulate 1-2 random teammate answers after a short delay
-    const hasSimulated = this.state.estudiantes.some((e) => e.id.startsWith('sim_'));
-    if (hasSimulated && esCorrecta) {
-      setTimeout(() => {
-        const simStudent = this.state.estudiantes.find((e) => e.id.startsWith('sim_') && e.id !== estudianteId);
-        if (simStudent) {
-          const simResp: RespuestaEjercicio = {
-            id: 'resp_sim_' + Date.now(),
-            sala_id: this.state.sala?.id || 'sala_default',
-            estudiante_id: simStudent.id,
-            estudiante_nombre: simStudent.nombre,
-            materia,
-            ejercicio_id: (ejercicioId % 20) + 1,
-            respuesta_seleccionada: 1,
-            es_correcta: true,
-            created_at: new Date().toISOString()
-          };
-          simStudent.respuestas_aportadas = (simStudent.respuestas_aportadas || 0) + 1;
-          this.state.respuestas = [...this.state.respuestas, simResp];
-          this.notify({
-            tipo: 'respuesta_enviada',
-            mensaje: `${simStudent.nombre} aportó al equipo`
-          });
-        }
-      }, 1500);
+  // -------------------------------------------------------------------------
+  // PRESENCIA EN TIEMPO REAL
+  // -------------------------------------------------------------------------
+  public updatePresence(estudianteId: string, estado: EstadoPresencia) {
+    const est = this.state.estudiantes.find((e) => e.id === estudianteId);
+    if (!est) return;
+
+    this.state.presencias[estudianteId] = {
+      sala_id: this.state.sala?.id || '',
+      estudiante_id: estudianteId,
+      estudiante_nombre: est.nombre,
+      avatar: est.avatar,
+      estado,
+      ultima_actividad: new Date().toISOString()
+    };
+
+    this.notify();
+  }
+
+  // -------------------------------------------------------------------------
+  // MURO UBUNTU (MENSAJES CORTOS Y MODERACIÓN)
+  // -------------------------------------------------------------------------
+  public postMuroMessage(
+    estudianteId: string, 
+    estudianteNombre: string, 
+    avatar: string,
+    contenido: string, 
+    tipo: MensajeMuro['tipo'], 
+    etapaOMateria?: string
+  ): MensajeMuro {
+    const nuevo: MensajeMuro = {
+      id: 'muro_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+      sala_id: this.state.sala?.id || 'sala_default',
+      estudiante_id: estudianteId,
+      estudiante_nombre: estudianteNombre,
+      avatar,
+      contenido: contenido.trim().slice(0, 140),
+      tipo,
+      etapa_o_materia: etapaOMateria,
+      aprobado: true,
+      created_at: new Date().toISOString()
+    };
+
+    this.state.mensajesMuro = [nuevo, ...this.state.mensajesMuro];
+
+    this.notify({
+      tipo: 'nuevo_mensaje_muro',
+      mensaje: `${estudianteNombre} compartió un mensaje en el Muro`
+    });
+
+    return nuevo;
+  }
+
+  public toggleAprobarMensaje(mensajeId: string, aprobado: boolean) {
+    this.state.mensajesMuro = this.state.mensajesMuro.map((m) => 
+      m.id === mensajeId ? { ...m, aprobado } : m
+    );
+    this.notify({
+      tipo: 'mensaje_moderado',
+      mensaje: `Mensaje ${aprobado ? 'visible' : 'oculto por la maestra'}`
+    });
+  }
+
+  public deleteMensajeMuro(mensajeId: string) {
+    this.state.mensajesMuro = this.state.mensajesMuro.filter((m) => m.id !== mensajeId);
+    this.notify({
+      tipo: 'mensaje_eliminado',
+      mensaje: 'Mensaje eliminado del Muro'
+    });
+  }
+
+  // Configuración de moderación (Permitir o restringir chat libre)
+  public setChatLibreHabilitado(habilitado: boolean) {
+    if (this.state.sala) {
+      this.state.sala.config_json = {
+        ...this.state.sala.config_json,
+        chat_libre_habilitado: habilitado
+      };
+      this.notify({
+        tipo: 'config_cambiada',
+        mensaje: `Chat libre ${habilitado ? 'activado' : 'desactivado'}`
+      });
     }
   }
 
-  // Update History Progress (Group consensus decision)
+  // -------------------------------------------------------------------------
+  // REACCIONES POSITIVAS
+  // -------------------------------------------------------------------------
+  public toggleReaccion(
+    objetivoTipo: TipoObjetivoReaccion,
+    objetivoId: string,
+    estudianteId: string,
+    emoji: EmojiReaccion
+  ) {
+    const index = this.state.reacciones.findIndex(
+      (r) => r.objetivo_tipo === objetivoTipo && 
+             r.objetivo_id === objetivoId && 
+             r.estudiante_id === estudianteId && 
+             r.emoji === emoji
+    );
+
+    if (index >= 0) {
+      // Quitar reacción
+      this.state.reacciones.splice(index, 1);
+    } else {
+      // Agregar reacción
+      this.state.reacciones.push({
+        id: 'reac_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        sala_id: this.state.sala?.id || '',
+        objetivo_tipo: objetivoTipo,
+        objetivo_id: objetivoId,
+        estudiante_id: estudianteId,
+        emoji,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    this.notify({
+      tipo: 'reaccion_actualizada',
+      mensaje: `Reacción ${emoji} registrada`
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // VOTACIONES EN VIVO
+  // -------------------------------------------------------------------------
+  public createVotacion(pregunta: string, opciones: Array<{ id: string; texto: string; icono?: string }>): Votacion {
+    const nueva: Votacion = {
+      id: 'vot_' + Date.now(),
+      sala_id: this.state.sala?.id || '',
+      pregunta,
+      opciones,
+      activa: true,
+      resultado_ganador: null,
+      created_at: new Date().toISOString(),
+      total_votos: 0
+    };
+
+    this.state.votacionActiva = nueva;
+    this.state.votos = [];
+
+    this.notify({
+      tipo: 'votacion_iniciada',
+      mensaje: `¡Nueva consulta grupal abierta: "${pregunta}"!`
+    });
+
+    return nueva;
+  }
+
+  public castVoto(votacionId: string, estudianteId: string, opcionId: string) {
+    if (!this.state.votacionActiva || this.state.votacionActiva.id !== votacionId || !this.state.votacionActiva.activa) {
+      return;
+    }
+
+    // Reemplazar o insertar voto único del estudiante
+    const existingIndex = this.state.votos.findIndex((v) => v.estudiante_id === estudianteId);
+    if (existingIndex >= 0) {
+      this.state.votos[existingIndex].opcion_id = opcionId;
+    } else {
+      this.state.votos.push({
+        id: 'v_' + Date.now(),
+        votacion_id: votacionId,
+        estudiante_id: estudianteId,
+        opcion_id: opcionId,
+        created_at: new Date().toISOString()
+      });
+    }
+
+    this.state.votacionActiva.total_votos = this.state.votos.length;
+
+    this.notify({
+      tipo: 'voto_emitido',
+      mensaje: 'Voto anónimo sumado al consenso'
+    });
+  }
+
+  public closeVotacion(votacionId: string) {
+    if (!this.state.votacionActiva || this.state.votacionActiva.id !== votacionId) return;
+
+    // Calcular opción ganadora
+    const counts: Record<string, number> = {};
+    for (const v of this.state.votos) {
+      counts[v.opcion_id] = (counts[v.opcion_id] || 0) + 1;
+    }
+
+    let maxVotos = -1;
+    let ganador: string | null = null;
+    let empate = false;
+
+    for (const op of this.state.votacionActiva.opciones) {
+      const c = counts[op.id] || 0;
+      if (c > maxVotos) {
+        maxVotos = c;
+        ganador = op.id;
+        empate = false;
+      } else if (c === maxVotos && maxVotos > 0) {
+        empate = true;
+      }
+    }
+
+    this.state.votacionActiva.activa = false;
+    this.state.votacionActiva.resultado_ganador = empate ? null : ganador;
+
+    this.notify({
+      tipo: 'votacion_cerrada',
+      mensaje: 'Consulta grupal completada con éxito'
+    });
+  }
+
+  // -------------------------------------------------------------------------
+  // TURNO DE MAPA COLABORATIVO
+  // -------------------------------------------------------------------------
+  public setTurnoDibujo(turno: TurnoDibujoColaborativo | null) {
+    this.state.turnoDibujo = turno;
+    this.notify({
+      tipo: 'turno_mapa_cambiado',
+      mensaje: turno 
+        ? `Turno de dibujo asignado a ${turno.estudiante_nombre}` 
+        : 'Turno de dibujo liberado'
+    });
+  }
+
+  // Progreso de Historia de Venezuela
   public updateHistoryDecision(
     etapa: EtapaHistorica,
     zona: string,
@@ -369,7 +566,6 @@ class RealtimeSyncManager {
 
     this.state.progresoHistoria = progreso;
 
-    // If completed chronicle, add to class codex (Códice de la clase)
     if (completado && datos.cronica_narrada) {
       const fragmentos = this.state.cuentoColaborativo?.fragmentos_json || [];
       const nuevoFragmento = {
@@ -389,45 +585,11 @@ class RealtimeSyncManager {
 
     this.notify({
       tipo: 'decision_historia',
-      mensaje: `El grupo tomó una decisión en ${zona}`
+      mensaje: `El grupo acordó una decisión en ${zona}`
     });
   }
 
-  // Cast vote in consensus
-  public castConsensusVote(optionId: string, studentName: string) {
-    if (!this.state.progresoHistoria) {
-      this.state.progresoHistoria = {
-        id: 'prog_temp',
-        sala_id: this.state.sala?.id || '',
-        etapa: this.state.sala?.etapa_activa || 'precolombina',
-        zona: this.state.sala?.zona_activa || 'andes_timoto',
-        datos_json: {
-          votos_consenso: {},
-          aportes_estudiantes: []
-        },
-        completado: false
-      };
-    }
-
-    const currentVotes = this.state.progresoHistoria.datos_json.votos_consenso || {};
-    currentVotes[optionId] = (currentVotes[optionId] || 0) + 1;
-
-    const aportes = this.state.progresoHistoria.datos_json.aportes_estudiantes || [];
-    aportes.push({
-      estudiante_nombre: studentName,
-      aporte: `Votó por ${optionId}`
-    });
-
-    this.state.progresoHistoria.datos_json.votos_consenso = currentVotes;
-    this.state.progresoHistoria.datos_json.aportes_estudiantes = aportes;
-
-    this.notify({
-      tipo: 'voto_consenso',
-      mensaje: `${studentName} sumó su voz al acuerdo`
-    });
-  }
-
-  // Reset room for new activity
+  // Regresar al lobby
   public resetToLobby() {
     if (this.state.sala) {
       this.state.sala.fase_actual = 'espera';
@@ -439,7 +601,6 @@ class RealtimeSyncManager {
     }
   }
 
-  // Get current state snapshot
   public getState(): RoomSyncState {
     return { ...this.state };
   }

@@ -34,6 +34,10 @@ import {
 import { useMapaBase } from '../hooks/useMapaBase';
 import { MapViewer } from './MapViewer';
 import { MapEditor } from './MapEditor';
+import { VotacionLive } from './VotacionLive';
+import { MapaColaborativo } from './MapaColaborativo';
+import { ReaccionesBar } from './ReaccionesBar';
+import { Vote } from 'lucide-react';
 
 interface HistoryModuleProps {
   sala: Sala;
@@ -67,9 +71,10 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
     etapaObj.zonas.find((z) => z.id === activeZonaId) || etapaObj.zonas[0];
 
   // Integración de Mapa Personalizado de la Maestra (Leaflet)
-  const { mapaBase, zonas: zonasCustom } = useMapaBase(sala.id, activeEtapa);
+  const { mapaBase, zonas: zonasCustom, saveZona } = useMapaBase(sala.id, activeEtapa);
   const [editorMapOpen, setEditorMapOpen] = useState(false);
-  const [mapViewMode, setMapViewMode] = useState<'custom' | 'vector'>('vector');
+  const [showVotacionModal, setShowVotacionModal] = useState(false);
+  const [mapViewMode, setMapViewMode] = useState<'custom' | 'vector' | 'colaborativo'>('vector');
 
   useEffect(() => {
     if (mapaBase?.publicado && mapaBase.imagen_url) {
@@ -299,6 +304,18 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
                   </button>
                 )}
 
+                <button
+                  onClick={() => {
+                    sounds.playClick();
+                    setShowVotacionModal(!showVotacionModal);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-teal-600 hover:bg-teal-700 text-white rounded-xl text-xs font-bold transition shadow-xs cursor-pointer"
+                  title="Votación y consenso de la clase"
+                >
+                  <Vote className="w-3.5 h-3.5" />
+                  <span>{showVotacionModal ? 'Ocultar Votación' : 'Votación'}</span>
+                </button>
+
                 {mapaBase?.publicado && (
                   <div className="inline-flex p-0.5 bg-stone-100 rounded-xl text-xs font-bold">
                     <button
@@ -311,6 +328,17 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
                       }`}
                     >
                       Leaflet ({zonasCustom.length})
+                    </button>
+                    <button
+                      onClick={() => {
+                        sounds.playClick();
+                        setMapViewMode('colaborativo');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg transition cursor-pointer ${
+                        mapViewMode === 'colaborativo' ? 'bg-white text-teal-900 shadow-2xs' : 'text-stone-500'
+                      }`}
+                    >
+                      Colaborativo
                     </button>
                     <button
                       onClick={() => {
@@ -328,8 +356,31 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
               </div>
             </div>
 
-            {/* Vista del Mapa: Leaflet CRS.Simple si está publicado y activo, o SVG Ilustrado */}
-            {mapViewMode === 'custom' && mapaBase?.publicado ? (
+            {/* Votación Live modal o expandible */}
+            {showVotacionModal && (
+              <div className="animate-in fade-in">
+                <VotacionLive
+                  salaId={sala.id}
+                  estudianteId={estudianteActual?.id}
+                  esMaestra={rol === 'maestra'}
+                />
+              </div>
+            )}
+
+            {/* Vista del Mapa: Colaborativo, Leaflet CRS.Simple o SVG Ilustrado */}
+            {mapViewMode === 'colaborativo' && mapaBase?.publicado ? (
+              <MapaColaborativo
+                salaId={sala.id}
+                mapaBase={mapaBase}
+                zonas={zonasCustom}
+                estudiantes={estudiantes}
+                estudianteActual={estudianteActual}
+                esMaestra={rol === 'maestra'}
+                onSaveZona={async (nombre, color, coords, autor) => {
+                  await saveZona(nombre, color, coords, undefined, autor);
+                }}
+              />
+            ) : mapViewMode === 'custom' && mapaBase?.publicado ? (
               <MapViewer
                 mapaBase={mapaBase}
                 zonas={zonasCustom}
@@ -663,6 +714,16 @@ export const HistoryModule: React.FC<HistoryModuleProps> = ({
                 <p className="text-sm sm:text-base text-stone-800 font-serif leading-relaxed italic bg-white/70 p-4 rounded-2xl border border-amber-200">
                   "{generatedChronicle}"
                 </p>
+
+                {/* Reacciones de compañeros a la crónica comunal */}
+                <div className="pt-2 border-t border-amber-200/80 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-amber-900">¿Qué te inspira esta crónica de tu clase?</span>
+                  <ReaccionesBar
+                    objetivoTipo="fragmento_cuento"
+                    objetivoId={`${activeEtapa}_${activeZonaId}`}
+                    estudianteId={estudianteActual?.id}
+                  />
+                </div>
 
                 <div className="flex items-center justify-between pt-1">
                   <span className="text-xs text-amber-800 font-medium">

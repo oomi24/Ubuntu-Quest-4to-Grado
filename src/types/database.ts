@@ -18,12 +18,15 @@ export type EtapaHistorica =
   | 'federacion' 
   | 'actualidad';
 
+export type EstadoPresencia = 'activo' | 'reflexionando' | 'ausente';
+
 export interface Estudiante {
   id: string;
   sala_id: string;
   nombre: string;
-  avatar: string; // emoji or animal avatar (e.g. turpial, chiguire, orquidea, jaguar, colibri)
+  avatar: string; // emoji o animal (turpial, chiguire, orquidea, jaguar, colibri)
   conectado: boolean;
+  estado_presencia?: EstadoPresencia;
   created_at: string;
   ultimo_aporte?: string;
   respuestas_aportadas?: number;
@@ -40,19 +43,20 @@ export interface Sala {
   created_at: string;
   config_json?: {
     meta_preguntas?: number;
-    permite_simulados?: boolean;
     sonido_activo?: boolean;
+    chat_libre_habilitado?: boolean; // Control de moderación docente
+    modo_mapa_colaborativo?: boolean;
   };
 }
 
 export interface PreguntaEjercicio {
   id: number;
   materia: MateriaTipo;
-  texto_base?: string; // Por ejemplo fábula o contexto
+  texto_base?: string;
   pregunta: string;
   opciones: string[];
-  respuesta_correcta: number; // índice 0..3
-  explicacion_ubuntu: string; // Explicación solidaria para aprender en grupo
+  respuesta_correcta: number; // 0..3
+  explicacion_ubuntu: string;
   tipo: 'literal' | 'inferencial' | 'operacion' | 'problema' | 'concepto' | 'acertijo';
 }
 
@@ -124,8 +128,8 @@ export interface CuentoColaborativo {
 }
 
 export interface CoordPunto {
-  x: number; // Coordenada X en píxeles de la imagen original
-  y: number; // Coordenada Y en píxeles de la imagen original
+  x: number;
+  y: number;
 }
 
 export interface MapaBase {
@@ -146,8 +150,88 @@ export interface ZonaMapa {
   sala_id: string;
   nombre: string;
   color: string;
-  coords_json: CoordPunto[]; // [{x, y}, ...]
+  coords_json: CoordPunto[];
   etapa: EtapaHistorica;
   orden: number;
+  autor_nombre?: string; // Para modo colaborativo entre alumnos
   created_at: string;
+}
+
+// ----------------------------------------------------------------------
+// INTERACCIÓN REAL ENTRE ESTUDIANTES (PROMPT 2)
+// ----------------------------------------------------------------------
+
+export interface PresenciaSala {
+  id?: string;
+  sala_id: string;
+  estudiante_id: string;
+  estudiante_nombre: string;
+  avatar: string;
+  estado: EstadoPresencia;
+  ultima_actividad: string;
+}
+
+export type TipoMensajeMuro = 'mensaje' | 'idea' | 'pregunta' | 'logro';
+
+export interface MensajeMuro {
+  id: string;
+  sala_id: string;
+  estudiante_id: string;
+  estudiante_nombre: string;
+  avatar?: string;
+  contenido: string; // máx 140 caracteres
+  tipo: TipoMensajeMuro;
+  etapa_o_materia?: string;
+  aprobado: boolean; // moderado por la maestra
+  created_at: string;
+}
+
+export type EmojiReaccion = '👏' | '❤️' | '⭐' | '🌟' | '💡' | '🌱';
+
+export type TipoObjetivoReaccion = 
+  | 'muro_ubuntu' 
+  | 'respuesta_ejercicio' 
+  | 'fragmento_cuento' 
+  | 'zona_mapa';
+
+export interface Reaccion {
+  id: string;
+  sala_id: string;
+  objetivo_tipo: TipoObjetivoReaccion;
+  objetivo_id: string;
+  estudiante_id: string;
+  emoji: EmojiReaccion;
+  created_at: string;
+}
+
+export interface OpcionVotacion {
+  id: string;
+  texto: string;
+  icono?: string;
+}
+
+export interface Votacion {
+  id: string;
+  sala_id: string;
+  pregunta: string;
+  opciones: OpcionVotacion[];
+  activa: boolean;
+  resultado_ganador?: string | null;
+  created_at: string;
+  total_votos?: number;
+}
+
+export interface Voto {
+  id: string;
+  votacion_id: string;
+  estudiante_id: string;
+  opcion_id: string;
+  created_at?: string;
+}
+
+export interface TurnoDibujoColaborativo {
+  estudiante_id: string;
+  estudiante_nombre: string;
+  avatar: string;
+  inicio_tiempo: string;
 }

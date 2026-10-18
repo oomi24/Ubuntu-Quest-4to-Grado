@@ -199,7 +199,7 @@ export default function App() {
                 </div>
 
                 <div className="text-[11px] text-teal-800 font-medium bg-teal-50 p-2.5 rounded-xl border border-teal-100">
-                  ✨ Incluye modo con 5 estudiantes virtuales de prueba para ensayar.
+                  ✨ Presencia en vivo, Muro comunitario Ubuntu y votaciones en tiempo real.
                 </div>
               </div>
 

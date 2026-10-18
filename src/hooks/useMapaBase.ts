@@ -171,7 +171,8 @@ export function useMapaBase(salaId: string, etapa: EtapaHistorica) {
     nombre: string,
     color: string,
     coords: CoordPunto[],
-    idToUpdate?: string
+    idToUpdate?: string,
+    autorNombre?: string
   ): Promise<ZonaMapa> => {
     if (!mapaBase) throw new Error('No hay un mapa base seleccionado');
 
@@ -184,6 +185,7 @@ export function useMapaBase(salaId: string, etapa: EtapaHistorica) {
       coords_json: coords,
       etapa,
       orden: idToUpdate ? (zonas.find((z) => z.id === idToUpdate)?.orden || 0) : zonas.length,
+      autor_nombre: autorNombre || (idToUpdate ? zonas.find((z) => z.id === idToUpdate)?.autor_nombre : undefined),
       created_at: new Date().toISOString()
     };
 

@@ -17,6 +17,8 @@ import {
   Volume2,
   Heart
 } from 'lucide-react';
+import { ReaccionesBar } from './ReaccionesBar';
+import { usePresence } from '../hooks/usePresence';
 
 interface SubjectModuleProps {
   sala: Sala;
@@ -82,6 +84,8 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
     }
   }, [logrosGrupo]);
 
+  const { cambiarEstado } = usePresence(sala.id, estudianteActual?.id);
+
   const handleSelectOption = (idx: number) => {
     if (selectedOption !== null && hasAnsweredCorrectly) return;
     setSelectedOption(idx);
@@ -93,6 +97,7 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
       sounds.playSuccessChime();
       setHasAnsweredCorrectly(true);
       setShowReflectionPause(false);
+      cambiarEstado('activo');
 
       // Register cooperative answer
       if (estudianteActual) {
@@ -109,6 +114,7 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
       // Ubuntu Reflection pause: no negative scoring, no shame!
       sounds.playReflectionTone();
       setShowReflectionPause(true);
+      cambiarEstado('reflexionando');
 
       if (estudianteActual) {
         realtimeManager.submitAnswer(
@@ -127,6 +133,7 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
     setSelectedOption(null);
     setShowReflectionPause(false);
     setHasAnsweredCorrectly(false);
+    cambiarEstado('activo');
     sounds.playClick();
     if (currentIdx < banco.length - 1) {
       setCurrentIdx((prev) => prev + 1);
@@ -329,7 +336,7 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
 
         {/* Ubuntu Reflection Pause (when student picks another option) */}
         {showReflectionPause && (
-          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 animate-in fade-in slide-in-from-top-2 space-y-2">
+          <div className="p-4 sm:p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 animate-in fade-in slide-in-from-top-2 space-y-3">
             <div className="flex items-center gap-2 text-amber-900 font-heading font-bold text-sm">
               <span className="text-xl">🤝</span>
               <span>¡Pausa de Reflexión Ubuntu! Discutamos juntos:</span>
@@ -340,8 +347,47 @@ export const SubjectModule: React.FC<SubjectModuleProps> = ({
             <div className="bg-white/80 p-3 rounded-xl border border-amber-200 text-xs sm:text-sm text-stone-700 font-medium">
               💡 <strong>Pista para el grupo:</strong> {currentExercise.explicacion_ubuntu}
             </div>
+
+            {/* Ver respuestas exploradas por los compañeros */}
+            <div className="p-3 bg-white/90 rounded-xl border border-amber-200/80 space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-amber-950">
+                <span>Exploración del Grupo (Respuestas sin revelar la correcta):</span>
+                <span className="text-[11px] font-normal text-amber-800">
+                  {respuestas.filter((r) => r.materia === materia && r.ejercicio_id === currentExercise.id).length} compañeros han aportado
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {currentExercise.opciones.map((_, oIdx) => {
+                  const quienesEligieron = respuestas.filter(
+                    (r) => r.materia === materia && r.ejercicio_id === currentExercise.id && r.respuesta_seleccionada === oIdx
+                  );
+                  return (
+                    <div key={oIdx} className="p-2 rounded-lg bg-amber-50/50 border border-amber-100 text-center">
+                      <span className="text-xs font-bold font-mono text-amber-900">
+                        Opción {String.fromCharCode(65 + oIdx)}
+                      </span>
+                      <div className="text-[11px] font-semibold text-stone-600 mt-0.5">
+                        {quienesEligieron.length} {quienesEligieron.length === 1 ? 'voto' : 'votos'}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Reacciones de apoyo entre compañeros */}
+              <div className="pt-2 border-t border-amber-100 flex flex-col sm:flex-row sm:items-center justify-between gap-1">
+                <span className="text-[11px] font-bold text-amber-900">Envía un mensaje de aliento con emojis:</span>
+                <ReaccionesBar
+                  objetivoTipo="respuesta_ejercicio"
+                  objetivoId={String(currentExercise.id)}
+                  estudianteId={estudianteActual?.id}
+                />
+              </div>
+            </div>
+
             <p className="text-[11px] text-amber-900 font-bold">
-              ¡Intenta seleccionar la opción correcta ahora con la ayuda de tu equipo!
+              ¡Intenta seleccionar la opción correcta ahora con la ayuda y sabiduría de tu equipo!
             </p>
           </div>
         )}
